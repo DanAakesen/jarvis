@@ -23,7 +23,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
-Verify that production records no weather-only wakes and at most one forecast reservation per owner per Copenhagen day, and reuses the saved forecast for the next qualifying trip.
+Verify in production: no weather-only wakes, at most one automatic forecast reservation per owner per Copenhagen day, and reuse only for the same unchanged calendar trip.
 
 Use the Apple-confirmed TestFlight build above for these device checks.
 

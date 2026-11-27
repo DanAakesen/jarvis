@@ -71,7 +71,7 @@ When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal lef
 
 ### Proactive
 
-The brain decides what needs attention, says why now, and opens the exact message with evidence and follow-up context. Reserve at most one automatic forecast per Copenhagen day for a weather-sensitive calendar event, then reuse the saved forecast. Weather and GitHub provide context but never trigger a review. Failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** shares one default-off switch across Settings and Proactive. Edit the background procedure separately from personal guidance and preserve edits on conflict or failure. Show whether a review ran, skipped or failed. Exact-time reminders have a separate delivery path.
+The brain decides what needs attention, says why now, and opens the exact message with evidence and follow-up context. Reserve at most one automatic forecast per Copenhagen day for a weather-sensitive calendar trip; reuse it only while that trip still matches. Weather and GitHub provide context but never trigger a review. Failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** shares one default-off switch across Settings and Proactive. Edit the background procedure separately from personal guidance and preserve edits on conflict or failure. Show whether a review ran, skipped or failed. Exact-time reminders have a separate delivery path.
 
 ### Memory vs Vault Knowledge
 

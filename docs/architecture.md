@@ -170,7 +170,7 @@ Home and Calendar read the primary Google Calendar through the owner-authenticat
 
 ## Proactive wake and Inbox review
 
-Weather cannot wake PI. With Calendar and Weather enabled, the poll picks the earliest eligible trip in the next 24 hours with a physical destination: a drive of at least an hour, an explicitly long drive or a recognised outdoor activity. It claims the owner and Copenhagen date in SQL before fetching, even on failure. Wakes reuse the saved forecast while the trip still matches. Outreach requires verified calendar and adverse-weather evidence for that trip. Manual requests use the normal tool.
+Weather cannot wake PI. Only the calendar poll can fetch an automatic forecast. With Calendar and Weather enabled, it picks the earliest eligible trip in the next 24 hours with a physical destination: a drive of at least an hour, an explicitly long drive or a recognised outdoor activity. It claims the owner and Copenhagen date in SQL before fetching, even on failure. Reuse requires the same event, start time and destination on that Copenhagen date. Outreach requires verified calendar and adverse-weather evidence for that trip. Manual requests use the normal tool.
 
 ```mermaid
 flowchart LR
@@ -231,7 +231,7 @@ flowchart LR
 
 - [Bicep](../infra/README.md) owns Azure SQL, Key Vault, Storage, ACR, Container Apps, Foundry and Static Web Apps. The backend uses managed identity and clients sign in with Entra; server credentials stay server-side.
 - [CI](../.github/workflows/ci.yml) qualifies the ready PR's exact head. [Deploy](../.github/workflows/deploy.yml) verifies the merged tree matches, reuses only compatible inputs and retains [deployment evidence](../.github/scripts/release_state.py).
-- Readiness verifies PI provisioning and the applied revision, not live conversations. [TestFlight](../.github/workflows/ios-testflight.yml) signs the dispatch SHA after green Deploy and reads back Apple's processing and internal beta state, not device acceptance.
+- Readiness verifies PI provisioning and the applied revision, not live conversations. [TestFlight](../.github/workflows/ios-testflight.yml) signs the dispatch SHA and checks Apple availability, not device acceptance. Follow the [release procedure](agent-context.md#testflight-build) for Deploy ordering.
 
 <a name="sandbox-credentials"></a>
 
