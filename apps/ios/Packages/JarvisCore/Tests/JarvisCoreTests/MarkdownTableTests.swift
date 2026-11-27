@@ -21,7 +21,7 @@ final class MarkdownTableTests: XCTestCase {
         blocks[0].text = "Before"
         blocks[blocks.count - 1].text = "After"
         let saved = JarvisMarkdownBlock.document(blocks)
-        XCTAssertEqual(saved, "Before\n" + table + "\nAfter")
+        XCTAssertEqual(saved, "Before\n\n" + table + "\n\nAfter")
         XCTAssertEqual(JarvisMarkdownBlock.parse(saved).compactMap(\.table), [JarvisMarkdownTable()])
     }
 
@@ -32,6 +32,22 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(reopened, [table])
     }
 
+    func testSavingLegacyTableSeparatesParagraphsAndPreservesCells() {
+        let table = "| One | Two | 3 |\n| --- | :---: | ---: |\n| A | B | C |"
+        let legacy = "Opening paragraph\n" + table + "\nChecklist\n- [ ] First"
+        let expected = "Opening paragraph\n\n" + table + "\n\nChecklist\n- [ ] First"
+        let saved = JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(legacy))
+        XCTAssertEqual(saved, expected)
+        XCTAssertEqual(JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(saved)), expected)
+    }
+
+    func testExistingBlankLinesAndFileEdgesRemainUntouched() {
+        let table = JarvisMarkdownTable().markdown
+        for source in [table, table + "\n", "\n" + table, "Before\n \n" + table + "\n\t\nAfter"] {
+            XCTAssertEqual(JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(source)), source)
+        }
+    }
+
     func testUntouchedTablesAndFencedExamplesRoundTrip() {
         let fence = String(repeating: "\u{60}", count: 3)
         let raw = "| A | B |\n| :--- | ---: |\n|  x | y  |"
@@ -39,6 +55,7 @@ final class MarkdownTableTests: XCTestCase {
         let blocks = JarvisMarkdownBlock.parse(source)
         XCTAssertEqual(blocks.compactMap(\.table).count, 2)
         XCTAssertEqual(blocks.map(\.text).joined(), source)
+        XCTAssertEqual(JarvisMarkdownBlock.document(blocks), source)
         var table = blocks.compactMap(\.table)[0]
         table.addRow()
         XCTAssertTrue(table.markdown.contains("| :--- | ---: |"))
