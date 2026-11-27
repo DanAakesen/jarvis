@@ -1,8 +1,9 @@
 # Jarvis
 
 Jarvis is a personal AI assistant for iPhone, Apple Watch and web. It supports
-chat, voice, proactive follow-ups, notes and tasks. Software Factory manages
-coding work against GitHub repositories.
+Chat, Voice, proactive follow-ups, notes and tasks. The CarPlay dashboard and
+hands-free Voice use the signed-in iPhone. Software Factory manages coding work
+against GitHub repositories.
 
 Start with [p0.md](p0.md) for what comes first, [PRODUCT.md](PRODUCT.md) for scope, [PLAN.md](PLAN.md) for current
 work, [architecture](docs/architecture.md) for how the system fits together,
