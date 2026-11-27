@@ -2,7 +2,7 @@
 
 ## Purpose and users
 
-Jarvis is Dan's personal assistant and a way to run the Jarvis project itself. It is single-user, works in Danish and English, and reaches the same conversation and tools from Chat and Voice. Web, iPhone and Watch are different surfaces, not separate assistants. Documentation and default UI copy are English.
+Jarvis is Dan's personal assistant and a way to run the Jarvis project itself. It is single-user, works in Danish and English, and reaches the same conversation and tools from Chat and Voice. iPhone, Watch, CarPlay and web are different surfaces, not separate assistants. Documentation and default UI copy are English.
 
 ## North star
 
