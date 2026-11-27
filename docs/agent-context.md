@@ -11,7 +11,7 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent logs
 
-PI can request retained backend diagnostics with `read_backend_logs` or use `checks_list` then `ci_log` for a failed Actions job tail. Use a narrow UTC window and check correlation and freshness in [the log source map](reference/logs.md). Neither tool reads operator-only Foundry telemetry or [native device logs](reference/logs.md#native-device-diagnostics). Factory worker output is separate; a saved reply is not a trace. Keep raw logs and prompts out of PRs.
+PI can use `read_backend_logs` for retained backend events and `checks_list` with `ci_log` for failed Actions jobs. The [log source map](reference/logs.md) covers UTC windows, freshness, correlation and job selection after reruns. These tools do not read operator-only Foundry telemetry or [native device logs](reference/logs.md#native-device-diagnostics). Factory output is separate; a saved reply is not a trace. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
