@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **145** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/46045418668). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/46042793866) verified the CarPlay entitlement and embedded Watch companion. |
+| TestFlight **147** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/46055170719). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/46055170719) verified the CarPlay entitlement and embedded Watch companion. |
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Dan confirmed the Health, Home, Calendar, Notes editing, Factory, Usage, Status, inline Proactive and red-theme checks on build 143. Build 145 includes shorter Home card footers, pinned notes below Schedule, Obsidian table spacing, Watch voice recovery and simpler Proactive preferences. Device confirmation remains open for the table and Watch fixes. |
 | Production | The [production deployment](https://github.com/DanAakesen/jarvis/actions/runs/46040812077) applied backend and PI changes from [#2118](https://github.com/DanAakesen/jarvis/pull/2118). Backend health and the scheduled Vault Mirror check passed. Live conversation acceptance was skipped. |
 | Background PI | GitHub and weather provide context, not wake triggers. Vault notes and tasks supply review context. Live X search needs a provider credential and an explicit public search. Proactive push delivery still needs device confirmation. |
@@ -25,9 +25,9 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 Verify in production: no weather-only wakes, at most one automatic forecast reservation per owner per Copenhagen day, and reuse only for the same unchanged calendar trip.
 
-The iPhone Notes live formatting awaits a device check. Open a note with a heading, highlight, checklist and table, edit a line, then tap Done and reopen it in Obsidian.
+Build 147 includes live Notes formatting and the neutral link and overflow icons. Open a note with a heading, highlight, checklist and table, edit a line, then tap Done and reopen it in Obsidian.
 
-The iPhone sidebar swipe fix awaits a device check in the next build. Drag left from the right edge on Home and a scrolling page. In Voice, swipe across a result to page it, then open the sidebar from above the result.
+The [iPhone simulator swipe test](https://github.com/DanAakesen/jarvis/actions/runs/46049780169) opened the drawer from Home and Notes and selected both destinations. Confirm the right-edge swipe on a physical iPhone running build 147. In Voice, swipe across a result to page it, then open the sidebar from above the result.
 
 Use the Apple-confirmed TestFlight build above for these device checks.
 
