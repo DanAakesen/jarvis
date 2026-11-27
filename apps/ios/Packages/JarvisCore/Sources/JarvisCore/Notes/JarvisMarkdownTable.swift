@@ -31,13 +31,14 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
     }
 
     public static func parse(_ source: String) -> [Self] {
-        let lines = source.components(separatedBy: "\n")
+        let lines = source.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         var result: [Self] = []
         var pending = ""
         var index = 0
         var fence: (Character, Int)?
         while index < lines.count {
-            let line = lines[index]
+            let slice = lines[index]
+            let line = String(slice)
             let trimmed = line.drop(while: { $0 == " " })
             if let marker = trimmed.first, marker == "~" || marker == "\u{60}" {
                 let count = trimmed.prefix(while: { $0 == marker }).count
@@ -45,10 +46,9 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
                     if open.0 == marker, count >= open.1, trimmed.dropFirst(count).allSatisfy(\.isWhitespace) { fence = nil }
                 } else if count >= 3 { fence = (marker, count) }
             }
-            if fence == nil, line.prefix(while: { $0 == " " }).count < 4, trimmed.first != "\t",
-               index + 1 < lines.count,
+            if fence == nil, line.prefix(while: { $0 == " " }).count < 4, trimmed.first != "\t", index + 1 < lines.count,
                let header = JarvisMarkdownTable.cells(line),
-               let dividers = JarvisMarkdownTable.cells(lines[index + 1]),
+               let dividers = JarvisMarkdownTable.cells(String(lines[index + 1])),
                header.count == dividers.count,
                dividers.allSatisfy({ $0.range(of: #"^:?-+:?$"#, options: .regularExpression) != nil }) {
                 result.append(Self(text: pending))
@@ -56,17 +56,18 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
                 let start = index
                 index += 2
                 var rows = [header]
-                while index < lines.count, let cells = JarvisMarkdownTable.cells(lines[index]), cells.count == header.count {
+                while index < lines.count, let cells = JarvisMarkdownTable.cells(String(lines[index])), cells.count == header.count {
                     rows.append(cells)
                     index += 1
                 }
-                result.append(Self(text: lines[start..<index].joined(separator: "\n"),
+                let end = lines[index - 1].endIndex
+                result.append(Self(text: String(source[lines[start].startIndex..<end]),
                                    table: JarvisMarkdownTable(rows: rows, dividers: dividers)))
-                if index < lines.count { pending = "\n" }
+                if end < source.endIndex { pending = String(source[end]) }
             } else {
                 pending += line
                 index += 1
-                if index < lines.count { pending += "\n" }
+                if slice.endIndex < source.endIndex { pending.append(source[slice.endIndex]) }
             }
         }
         result.append(Self(text: pending))
